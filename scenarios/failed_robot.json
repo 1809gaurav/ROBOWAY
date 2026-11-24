@@ -1,0 +1,17 @@
+{
+  "id": "failed_robot",
+  "name": "Robot Failure and Recovery",
+  "description": "Six deliveries run around shelving while robots fail before and after pickup.",
+  "seed": 29,
+  "grid": {
+    "width": 16,
+    "height": 10,
+    "obstacles": [[4, 1], [4, 2], [4, 3], [4, 4], [4, 5], [7, 4], [8, 4], [9, 4], [11, 1], [11, 2], [11, 3], [11, 5], [11, 6], [11, 7]],
+    "blocked": [],
+    "pickups": [{"id": "P1", "pos": [1, 1]}, {"id": "P2", "pos": [14, 1]}, {"id": "P3", "pos": [1, 8]}, {"id": "P4", "pos": [14, 8]}, {"id": "P5", "pos": [7, 2]}, {"id": "P6", "pos": [8, 7]}],
+    "drops": [{"id": "D1", "pos": [14, 2]}, {"id": "D2", "pos": [1, 2]}, {"id": "D3", "pos": [14, 7]}, {"id": "D4", "pos": [1, 7]}, {"id": "D5", "pos": [13, 5]}, {"id": "D6", "pos": [2, 5]}]
+  },
+  "robots": [{"id": "R1", "start": [1, 1]}, {"id": "R2", "start": [14, 1]}, {"id": "R3", "start": [1, 8]}, {"id": "R4", "start": [12, 8]}],
+  "jobs": [{"pickup_id": "P1", "drop_id": "D1", "at_tick": 0}, {"pickup_id": "P2", "drop_id": "D2", "at_tick": 0}, {"pickup_id": "P3", "drop_id": "D3", "at_tick": 0}, {"pickup_id": "P4", "drop_id": "D4", "at_tick": 0}, {"pickup_id": "P5", "drop_id": "D5", "at_tick": 0}, {"pickup_id": "P6", "drop_id": "D6", "at_tick": 0}],
+  "scripted_events": [{"tick": 1, "action": "fail_robot", "robot": "R4"}, {"tick": 12, "action": "fail_robot", "robot": "R2"}]
+}

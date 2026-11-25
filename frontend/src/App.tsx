@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import {
   Activity, ArrowRight, ArrowUpRight, Battery, Boxes, ChevronDown, CircleHelp,
@@ -9,14 +9,17 @@ import { Warehouse2D, Warehouse3D } from "./Warehouse";
 import type { Robot } from "./Warehouse";
 import MonitorPage from "./monitor/MonitorPage.jsx";
 import MonitorShareModal from "./monitor/MonitorShareModal.jsx";
+import { API_BASE } from "./engine/config";
+import { useEngineState } from "./engine/useEngineState";
+import { toViewModel } from "./engine/adapter";
+import type { State as ContractState } from "./engine/types";
+import PredictionsCard from "./engine/PredictionsCard";
 
-const API = (import.meta.env.VITE_API_BASE ?? import.meta.env.VITE_API_URL ?? "http://localhost:8000").replace(/\/$/, "");
 type Page = "Home" | "About" | "Product" | "Simulator" | "Manage" | "Profile";
-type Job = { id: string; status: string; robot: string; from: string; to: string };
+type Job = { id: string; pickup_id: string; drop_id: string; state: string; owner: string | null; delivered_by?: string | null };
 type SimulationState = {
   running: boolean;
   tick: number;
-  uptime: number;
   collisionsAvoided: number;
   completedJobs: number;
   width: number;
@@ -27,11 +30,10 @@ type SimulationState = {
 };
 
 const initialState: SimulationState = {
-  running: false, tick: 0, uptime: 0, collisionsAvoided: 0, completedJobs: 0,
+  running: false, tick: 0, collisionsAvoided: 0, completedJobs: 0,
   width: 18, height: 12, blocked: [], robots: [], jobs: [],
 };
 const pages: Page[] = ["Home", "About", "Product", "Simulator", "Manage", "Profile"];
-const formatTime = (seconds: number) => `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
 
 function App() {
   if (window.location.pathname === "/monitor") return <MonitorPage />;
@@ -40,45 +42,19 @@ function App() {
 
 function MainApp() {
   const [page, setPage] = useState<Page>("Home");
-  const [state, setState] = useState<SimulationState>(initialState);
-  const [connected, setConnected] = useState(false);
+  const engine = useEngineState();
+  const state = engine.state ? toViewModel(engine.state as ContractState) as unknown as SimulationState : initialState;
+  const connected = engine.connected;
   const [view, setView] = useState<"3d" | "2d">("3d");
-  const [error, setError] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [monitorShareOpen, setMonitorShareOpen] = useState(false);
-
-  const refresh = useCallback(async () => {
-    try {
-      const response = await fetch(`${API}/api/state`);
-      if (!response.ok) throw new Error(`Backend returned ${response.status}`);
-      setState(await response.json() as SimulationState);
-      setError("");
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Could not connect to simulation server");
-    }
-  }, []);
-
-  useEffect(() => {
-    void refresh();
-    const socket = new WebSocket(API.replace(/^http/, "ws") + "/ws");
-    socket.onopen = () => setConnected(true);
-    socket.onclose = () => setConnected(false);
-    socket.onmessage = (event: MessageEvent<string>) => setState(JSON.parse(event.data) as SimulationState);
-    socket.onerror = () => setConnected(false);
-    return () => socket.close();
-  }, [refresh]);
-
-  const action = useCallback(async (name: "start" | "pause" | "reset" | "step") => {
-    try {
-      const response = await fetch(`${API}/api/simulation/${name}`, { method: "POST" });
-      if (!response.ok) throw new Error(`Action failed (${response.status})`);
-      setState(await response.json() as SimulationState);
-      setError("");
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Simulation action failed");
-    }
-  }, []);
+  const action = async (name: "start" | "pause" | "reset" | "step") => {
+    if (name === "start") await engine.start();
+    if (name === "pause") await engine.pause();
+    if (name === "step") await engine.step();
+    if (name === "reset" && engine.state) await engine.loadScenario(engine.state.scenario_id);
+  };
 
   const goTo = (destination: Page) => {
     setPage(destination);
@@ -139,15 +115,16 @@ function MainApp() {
           </div>
         </header>
 
-        {error && <div className="error-banner"><WifiOff size={16} /><span>Backend offline — start the API to connect. {error}</span><button onClick={() => void refresh()}>Retry</button></div>}
+        {!connected && <div className="error-banner"><WifiOff size={16} /><span>Backend offline — reconnecting to the engine.</span></div>}
+        {engine.toast && <div className="error-banner"><WifiOff size={16} /><span>{engine.toast}</span><button onClick={engine.clearToast}>Dismiss</button></div>}
         {page === "Home" && <HomePage goTo={goTo} state={state} connected={connected} />}
-        {page === "Simulator" && <SimulatorPage state={state} action={action} view={view} setView={setView} connected={connected} onShowMonitor={() => setMonitorShareOpen(true)} />}
+        {page === "Simulator" && <SimulatorPage state={state} action={action} view={view} setView={setView} connected={connected} engine={engine} onShowMonitor={() => setMonitorShareOpen(true)} />}
         {page === "About" && <AboutPage goTo={goTo} />}
         {page === "Product" && <ProductPage goTo={goTo} />}
         {page === "Manage" && <ManagePage robots={robots} />}
         {page === "Profile" && <ProfilePage />}
       </main>
-      {monitorShareOpen && <MonitorShareModal apiBase={API} onClose={() => setMonitorShareOpen(false)} />}
+      {monitorShareOpen && <MonitorShareModal apiBase={API_BASE} onClose={() => setMonitorShareOpen(false)} />}
     </div>
   );
 }
@@ -201,14 +178,38 @@ function MetricCard({ label, value, suffix, trend, icon, trendUp = false }: { la
   return <article className="metric-card"><div className="metric-top"><span>{label}</span><div className="metric-icon">{icon}</div></div><div className="metric-value">{value}<small>{suffix}</small></div><div className={`metric-trend ${trendUp ? "trend-up" : ""}`}>{trendUp ? <ArrowUpRight size={13} /> : <span className="trend-dot" />}{trend}</div></article>;
 }
 
-function SimulatorPage({ state, action, view, setView, connected, onShowMonitor }: { state: SimulationState; action: (name: "start" | "pause" | "reset" | "step") => Promise<void>; view: "3d" | "2d"; setView: (view: "3d" | "2d") => void; connected: boolean; onShowMonitor: () => void }) {
+function SimulatorPage({ state, action, view, setView, connected, engine, onShowMonitor }: { state: SimulationState; action: (name: "start" | "pause" | "reset" | "step") => Promise<void>; view: "3d" | "2d"; setView: (view: "3d" | "2d") => void; connected: boolean; engine: ReturnType<typeof useEngineState>; onShowMonitor: () => void }) {
   const robotCount = state.robots.length;
+  const [scenarios, setScenarios] = useState<Array<{id:string;name:string}>>([]);
+  const [scenarioId, setScenarioId] = useState(engine.state?.scenario_id ?? "narrow_passage");
+  const [pickupId, setPickupId] = useState("");
+  const [dropId, setDropId] = useState("");
+  const [failRobotId, setFailRobotId] = useState("");
+  const [blockMode, setBlockMode] = useState(false);
+  const [heatmap, setHeatmap] = useState(false);
+  useEffect(() => {
+    fetch(`${API_BASE}/api/scenarios`).then((response) => response.json()).then((payload) => setScenarios(payload.scenarios ?? [])).catch(() => setScenarios([]));
+  }, []);
+  useEffect(() => {
+    if (engine.state) setScenarioId(engine.state.scenario_id);
+  }, [engine.state?.scenario_id]);
   return (
     <div className="page-content simulator-page">
       <div className="sim-header"><div><div className="eyebrow"><span className="eyebrow-line" />SIMULATION CONTROL</div><h1>Warehouse <em>simulator.</em></h1><p>Watch your fleet think, route, and move — all in real time.</p></div><div className="sim-header-actions"><button className="secondary-button" onClick={onShowMonitor}>Monitor on phone</button><button className="secondary-button" onClick={() => void action("reset")}><RotateCcw size={15} /> Reset</button><button className="primary-button" onClick={() => void action(state.running ? "pause" : "start")}>{state.running ? <Pause size={15} /> : <Play size={15} fill="currentColor" />}{state.running ? "Pause simulation" : "Run simulation"}</button></div></div>
+      <div className="sim-header-actions" style={{ flexWrap: "wrap", marginBottom: 12 }}>
+        <select aria-label="Scenario" value={scenarioId} onChange={(event) => setScenarioId(event.target.value)}>{scenarios.map((scenario) => <option key={scenario.id} value={scenario.id}>{scenario.name}</option>)}</select>
+        <button className="secondary-button" onClick={() => void engine.loadScenario(scenarioId)}>Load scenario</button>
+        <select aria-label="Speed" value={engine.state?.speed ?? 1} onChange={(event) => void engine.setSpeed(Number(event.target.value))}><option value="0.5">0.5x</option><option value="1">1x</option><option value="2">2x</option><option value="4">4x</option></select>
+        <select aria-label="Pickup" value={pickupId} onChange={(event) => setPickupId(event.target.value)}><option value="">Pickup</option>{engine.state?.grid.pickups.map((pickup) => <option key={pickup.id} value={pickup.id}>{pickup.id}</option>)}</select>
+        <select aria-label="Drop" value={dropId} onChange={(event) => setDropId(event.target.value)}><option value="">Drop</option>{engine.state?.grid.drops.map((drop) => <option key={drop.id} value={drop.id}>{drop.id}</option>)}</select>
+        <button className="secondary-button" disabled={!pickupId || !dropId} onClick={() => void engine.addJob(pickupId, dropId)}>Add job</button>
+        <select aria-label="Robot" value={failRobotId} onChange={(event) => setFailRobotId(event.target.value)}><option value="">Robot</option>{engine.state?.robots.map((robot) => <option key={robot.id} value={robot.id}>{robot.id}</option>)}</select>
+        <button className="secondary-button" disabled={!failRobotId} onClick={() => void engine.failRobot(failRobotId)}>Fail robot</button>
+        <button className={blockMode ? "primary-button" : "secondary-button"} onClick={() => setBlockMode((value) => !value)}>{blockMode ? "Blocking: click a cell" : "Block mode"}</button>
+        <button className={heatmap ? "primary-button" : "secondary-button"} onClick={() => setHeatmap((value) => !value)}>Heatmap</button>
+      </div>
       <div className="sim-stat-strip">
         <div className="sim-stat"><span className="stat-dot green-dot" /><span>SIMULATION</span><strong>{state.running ? "RUNNING" : "PAUSED"}</strong></div>
-        <div className="sim-stat"><span className="stat-icon-mini"><Clock3 size={14} /></span><span>UPTIME</span><strong className="mono">{formatTime(state.uptime)}</strong></div>
         <div className="sim-stat"><span className="stat-icon-mini"><Activity size={14} /></span><span>SIM TICK</span><strong className="mono">{String(state.tick).padStart(5, "0")}</strong></div>
         <div className="sim-stat"><span className="stat-icon-mini"><ShieldCheck size={14} /></span><span>CONFLICTS AVOIDED</span><strong className="mono">{state.collisionsAvoided}</strong></div>
         <div className="sim-stat"><span className={`connection-dot ${connected ? "" : "disconnected"}`} /><span>ENGINE</span><strong>{connected ? "CONNECTED" : "OFFLINE"}</strong></div>
@@ -217,19 +218,30 @@ function SimulatorPage({ state, action, view, setView, connected, onShowMonitor 
         <section className="sim-map-panel">
           <div className="panel-heading"><div><h2>Northstar distribution center</h2><span>Zone A · 18 × 12 grid · {robotCount} active units</span></div><div className="map-actions"><div className="view-switch"><button className={view === "3d" ? "selected" : ""} onClick={() => setView("3d")}>3D view</button><button className={view === "2d" ? "selected" : ""} onClick={() => setView("2d")}>2D grid</button></div><button className="icon-button" aria-label="Map settings"><Settings2 size={16} /></button></div></div>
           <div className="map-viewport">
-            {robotCount ? view === "3d" ? <Warehouse3D state={state} /> : <Warehouse2D state={state} /> : <div className="map-loading">Waiting for the simulation engine…</div>}
+            {robotCount ? view === "3d" ? <Warehouse3D state={{ ...state, ...({ obstacles: engine.state?.grid.obstacles.map(([x, y]) => ({ x, y })) ?? [], pickups: engine.state?.grid.pickups ?? [], drops: engine.state?.grid.drops ?? [], heatmap: engine.state?.metrics.congestion.heatmap as Array<[number, number, number?]> ?? [] }) }} heatmap={heatmap} blockMode={blockMode} onBlockCell={(x, y) => { const blocked = state.blocked.some((cell) => cell.x === x && cell.y === y); void (blocked ? engine.unblockCell(x, y) : engine.blockCell(x, y)); }} /> : <Warehouse2D state={{ ...state, ...({ obstacles: engine.state?.grid.obstacles.map(([x, y]) => ({ x, y })) ?? [], pickups: engine.state?.grid.pickups ?? [], drops: engine.state?.grid.drops ?? [] }) }} blockMode={blockMode} onBlockCell={(x, y) => { const blocked = state.blocked.some((cell) => cell.x === x && cell.y === y); void (blocked ? engine.unblockCell(x, y) : engine.blockCell(x, y)); }} /> : <div className="map-loading">Waiting for the simulation engine…</div>}
             <div className="map-legend"><span><i className="legend-robot" /> Robots</span><span><i className="legend-rack" /> Storage racks</span><span><i className="legend-route" /> Planned route</span></div>
             <div className="map-coordinate">NORTHSTAR DC <span>·</span> ZONE A</div>
           </div>
           <div className="map-controls"><div className="map-status"><span className="live-pulse" /> {state.running ? "LIVE SIMULATION" : "SIMULATION PAUSED"} <span className="separator">/</span> SPACE-TIME A*</div><button onClick={() => void action("step")} className="step-button">Step forward <ArrowRight size={14} /></button></div>
         </section>
         <aside className="sim-right">
+          {engine.state && <section className="panel-card"><div className="panel-title"><h3>Metrics</h3></div><div className="job-list">
+            <div className="job-row"><strong>Completed / total</strong><span>{engine.state.metrics.completed_jobs} / {engine.state.metrics.total_jobs}</span></div>
+            <div className="job-row"><strong>Total wait ticks</strong><span>{engine.state.metrics.total_wait_ticks}</span></div>
+            <div className="job-row"><strong>Conflicts prevented</strong><span>{engine.state.metrics.conflicts_prevented}</span></div>
+            <div className="job-row"><strong>Planner rejections</strong><span>{engine.state.metrics.planner_rejections}</span></div>
+            <div className="job-row"><strong>Deadlocks resolved</strong><span>{engine.state.metrics.deadlocks_resolved}</span></div>
+            <div className="job-row"><strong>Reassignments</strong><span>{engine.state.metrics.reassignments}</span></div>
+            <div className="job-row"><strong>Invariant violations</strong><span style={{ color: engine.state.metrics.invariant_violations === 0 ? "#22c55e" : "#ef4444" }}>{engine.state.metrics.invariant_violations}</span></div>
+          </div></section>}
+          <PredictionsCard />
           <section className="panel-card fleet-panel"><div className="panel-title"><div><h3>Robot fleet</h3><span>{robotCount} units active</span></div><button className="link-button">View all <ArrowRight size={13} /></button></div>
-            <div className="fleet-list">{state.robots.map((robot) => <article className="fleet-row" key={robot.id}>            <div className="robot-avatar" style={{ "--robot-color": robot.color } as CSSProperties}><Truck size={17} /></div><div className="robot-details"><strong>{robot.name}<small>{robot.id.toUpperCase()}</small></strong><div className="robot-meta"><span><span className="tiny-green" /> {robot.status}</span><span>↗ {robot.target.x}, {robot.target.y}</span></div></div><div className="battery"><Battery size={13} /><span>{Math.round(robot.battery)}%</span></div></article>)}</div>
+            <div className="fleet-list">{state.robots.map((robot) => <article className="fleet-row" key={robot.id}>            <div className="robot-avatar" style={{ "--robot-color": robot.color } as CSSProperties}><Truck size={17} /></div><div className="robot-details"><strong>{robot.name}<small>{robot.id.toUpperCase()}</small></strong><div className="robot-meta"><span><span className="tiny-green" /> {robot.status}</span><span>↗ {robot.target.x}, {robot.target.y}</span></div></div><div className="battery"><span>Wait {robot.waitTicks}</span></div></article>)}</div>
           </section>
           <section className="panel-card jobs-panel"><div className="panel-title"><div><h3>Active missions</h3><span>Latest assignments</span></div><button className="link-button">Queue <ArrowRight size={13} /></button></div>
-            <div className="job-list">{state.jobs.map((job, index) => <div className="job-row" key={job.id}><span className={`job-number ${index === 0 ? "job-active" : ""}`}>{String(index + 1).padStart(2, "0")}</span><div className="job-info"><strong>{job.id}</strong><span>{job.from} <ArrowRight size={11} /> {job.to}</span></div><span className={`job-status ${job.status === "in progress" ? "in-progress" : ""}`}>{job.status}</span></div>)}</div>
+            <div className="job-list">{state.jobs.map((job, index) => <div className="job-row" key={job.id}><span className={`job-number ${index === 0 ? "job-active" : ""}`}>{String(index + 1).padStart(2, "0")}</span><div className="job-info"><strong>{job.id}</strong><span>{job.pickup_id} <ArrowRight size={11} /> {job.drop_id}</span></div><span className={`job-status ${job.state === "PickedUp" ? "in-progress" : ""}`}>{job.state}</span></div>)}</div>
           </section>
+          <section className="panel-card"><div className="panel-title"><h3>Event log</h3></div><div className="job-list">{[...engine.events].sort((a, b) => b.id - a.id).slice(0, 20).map((event) => <div className="job-row" key={event.id}><strong>[{event.tick}]</strong><span>{event.msg}</span></div>)}</div></section>
         </aside>
       </div>
       <footer className="footer-line"><span>RoboWay simulation engine · v1.0</span><span>Space-time A* · Conflict reservations</span><span className="footer-status"><i /> {connected ? "WebSocket live" : "Reconnecting"}</span></footer>
@@ -254,7 +266,7 @@ function ProductRow({ number, icon, title, text }: { number: string; icon: React
 }
 
 function ManagePage({ robots }: { robots: Robot[] }) {
-  return <div className="page-content secondary-page"><div className="page-title-row"><div><div className="eyebrow"><span className="eyebrow-line" />FLEET OPERATIONS</div><h1>Fleet <em>manage.</em></h1><p>Every unit, every status, one clear view.</p></div><button className="secondary-button"><Settings2 size={15} /> Fleet settings</button></div><div className="manage-grid">{robots.map((robot) => <article className="manage-card" key={robot.id}><div className="manage-card-top"><div className="robot-avatar large" style={{ "--robot-color": robot.color } as CSSProperties}><Truck size={20} /></div><span className="status-pill"><i /> {robot.status}</span></div><h3>{robot.name}</h3><span className="robot-id">{robot.id.toUpperCase()} · AUTONOMOUS MOBILE ROBOT</span><div className="manage-divider" /><div className="manage-details"><span><Map size={14} /> Current position <b>{robot.x}, {robot.y}</b></span><span><Battery size={14} /> Battery <b>{Math.round(robot.battery)}%</b></span><span><Boxes size={14} /> Jobs completed <b>{robot.completed}</b></span></div><button className="manage-action">View robot details <ArrowRight size={14} /></button></article>)}</div><div className="empty-add-card"><div className="empty-add-icon"><Truck size={19} /></div><div><strong>Connect another robot</strong><span>Bring more of your fleet into RoboWay.</span></div><button className="secondary-button">Add robot <ArrowRight size={14} /></button></div></div>;
+  return <div className="page-content secondary-page"><div className="page-title-row"><div><div className="eyebrow"><span className="eyebrow-line" />FLEET OPERATIONS</div><h1>Fleet <em>manage.</em></h1><p>Every unit, every status, one clear view.</p></div><button className="secondary-button"><Settings2 size={15} /> Fleet settings</button></div><div className="manage-grid">{robots.map((robot) => <article className="manage-card" key={robot.id}><div className="manage-card-top"><div className="robot-avatar large" style={{ "--robot-color": robot.color } as CSSProperties}><Truck size={20} /></div><span className="status-pill"><i /> {robot.status}</span></div><h3>{robot.name}</h3><span className="robot-id">{robot.id.toUpperCase()} · AUTONOMOUS MOBILE ROBOT</span><div className="manage-divider" /><div className="manage-details"><span><Map size={14} /> Current position <b>{robot.x}, {robot.y}</b></span><span><Battery size={14} /> Battery <b>n/a</b></span><span><Boxes size={14} /> Wait ticks <b>{robot.waitTicks}</b></span></div><button className="manage-action">View robot details <ArrowRight size={14} /></button></article>)}</div><div className="empty-add-card"><div className="empty-add-icon"><Truck size={19} /></div><div><strong>Connect another robot</strong><span>Bring more of your fleet into RoboWay.</span></div><button className="secondary-button">Add robot <ArrowRight size={14} /></button></div></div>;
 }
 
 function ProfilePage() {

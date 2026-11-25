@@ -1,6 +1,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
+import roboway.server as server
 from roboway.server import app
 
 
@@ -122,3 +123,47 @@ def test_scenario_list_and_health_endpoints(client):
     assert client.get("/health").json() == {"ok": True}
     scenarios = client.get("/api/scenarios").json()["scenarios"]
     assert {scenario["id"] for scenario in scenarios} == {"narrow_passage", "failed_robot", "blocked_aisle"}
+
+
+def test_step_endpoint_advances_one_tick_when_paused(client):
+    before = client.get("/api/state").json()["tick"]
+    response = client.post("/api/sim/step")
+    assert response.status_code == 200
+    assert response.json() == {"ok": True}
+    after = client.get("/api/state").json()["tick"]
+    assert after == before + 1
+
+
+def test_cors_preflight_accepts_lan_origin(client):
+    response = client.options(
+        "/api/state",
+        headers={
+            "Origin": "http://192.168.1.25:5173",
+            "Access-Control-Request-Method": "GET",
+        },
+    )
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://192.168.1.25:5173"
+
+
+def test_ml_status_disabled_and_predict_error(client, monkeypatch):
+    monkeypatch.setattr(server, "model_predictor", None)
+    monkeypatch.setattr(server, "model_name", None)
+    assert client.get("/api/ml/status").json() == {"enabled": False, "model": None}
+    response = client.post("/api/ml/predict")
+    assert response.status_code == 400
+    assert response.json()["error"] == "ML_DISABLED"
+
+
+def test_fake_predictor_endpoint_plumbing(client, monkeypatch):
+    class FakePredictor:
+        def predict(self, snapshot):
+            return {"tick": snapshot["tick"], "advisory": "test"}
+
+    monkeypatch.setattr(server, "model_predictor", FakePredictor())
+    monkeypatch.setattr(server, "model_name", "fake-model")
+    assert client.get("/api/ml/status").json() == {"enabled": True, "model": "fake-model"}
+    response = client.post("/api/ml/predict")
+    assert response.status_code == 200
+    assert response.json()["ok"] is True
+    assert response.json()["prediction"]["advisory"] == "test"

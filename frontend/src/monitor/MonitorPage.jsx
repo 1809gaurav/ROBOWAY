@@ -1,11 +1,10 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import GridCanvas from "./GridCanvas.jsx";
-import { getWebSocketUrl, resolveApiBase, useRoboState } from "./useRoboState.js";
+import { Warehouse3D } from "../Warehouse";
+import PredictionsCard from "../engine/PredictionsCard";
+import { useEngineState } from "../engine/useEngineState";
 import { statusColor } from "./statusColors.js";
 import "./monitor.css";
-
-const apiBase = resolveApiBase();
-const socketUrl = getWebSocketUrl(apiBase);
 
 function firstValue(...values) {
   return values.find((value) => value !== undefined && value !== null);
@@ -28,15 +27,15 @@ function coordinate(value) {
   return value ?? "—";
 }
 
-const RobotRows = memo(function RobotRows({ robots }) {
+const RobotRows = memo(function RobotRows({ robots, onFollow }) {
   return <div className="monitor-list">
-    {robots.length ? robots.map((robot) => <div className="monitor-list-row" key={robot.id}>
+    {robots.length ? robots.map((robot) => <button type="button" className="monitor-list-row" key={robot.id} onClick={() => onFollow?.(robot.id)}>
       <span className="monitor-status-mark" style={{ "--status-color": statusColor(robot.status) }} aria-hidden="true" />
       <span className="monitor-row-primary"><strong>{robot.id}</strong><small>{robot.status ?? "unknown"}</small></span>
       <span className="monitor-row-secondary"><small>Job</small>{robot.job_id ?? robot.job ?? "—"}</span>
       <span className="monitor-row-secondary"><small>Carrying</small>{robot.carrying ?? "—"}</span>
       <span className="monitor-row-secondary"><small>Wait ticks</small>{robot.wait_ticks ?? 0}</span>
-    </div>) : <p className="monitor-empty">No robots in this state.</p>}
+    </button>) : <p className="monitor-empty">No robots in this state.</p>}
   </div>;
 });
 
@@ -76,10 +75,21 @@ function LoadingSkeleton() {
 }
 
 export default function MonitorPage() {
-  const { state, events, connected, connectedAtMs, lastUpdateMs, eventsError } = useRoboState(socketUrl);
+  const { state: contractState, events, connected, lastUpdateMs } = useEngineState();
+  const state = contractState;
   const [now, setNow] = useState(Date.now());
   const [showHeatmap, setShowHeatmap] = useState(false);
   const [pauseScroll, setPauseScroll] = useState(false);
+  const [followedRobot, setFollowedRobot] = useState(null);
+  const [viewMode, setViewMode] = useState(() => {
+    if (window.innerWidth < 360) return "2d";
+    try {
+      const canvas = document.createElement("canvas");
+      return canvas.getContext("webgl") || canvas.getContext("experimental-webgl") ? "3d" : "2d";
+    } catch {
+      return "2d";
+    }
+  });
   const eventContainer = useRef(null);
   const robots = useMemo(() => Array.isArray(state?.robots) ? state.robots : [], [state?.tick, state?.robots]);
   const jobs = useMemo(() => Array.isArray(state?.jobs) ? state.jobs : [], [state?.tick, state?.jobs]);
@@ -97,7 +107,7 @@ export default function MonitorPage() {
 
   if (!state) return <LoadingSkeleton />;
 
-  const silenceOrigin = lastUpdateMs ?? connectedAtMs;
+  const silenceOrigin = lastUpdateMs;
   const silenceMs = silenceOrigin === null ? Infinity : now - silenceOrigin;
   const banner = connected
     ? silenceMs > 5000
@@ -128,12 +138,38 @@ export default function MonitorPage() {
     </header>
 
     <div className="monitor-content">
-      <GridCanvas state={state} showHeatmap={showHeatmap} onToggleHeatmap={() => setShowHeatmap((visible) => !visible)} />
+      <div className="monitor-view-toolbar">
+        <div className="view-switch"><button className={viewMode === "2d" ? "selected" : ""} onClick={() => setViewMode("2d")}>2D</button><button className={viewMode === "3d" ? "selected" : ""} onClick={() => setViewMode("3d")}>3D</button></div>
+        <button className="monitor-chip" onClick={() => setShowHeatmap((visible) => !visible)} aria-pressed={showHeatmap}>Heatmap</button>
+      </div>
+      {followedRobot && <div className="monitor-follow-chip">Follow {followedRobot} · {robots.find((robot) => robot.id === followedRobot)?.status ?? "n/a"} · Job {robots.find((robot) => robot.id === followedRobot)?.job_id ?? "—"} · Carrying {robots.find((robot) => robot.id === followedRobot)?.carrying ?? "—"} · Wait {robots.find((robot) => robot.id === followedRobot)?.wait_ticks ?? 0}<button onClick={() => setFollowedRobot(null)}>Stop following</button></div>}
+      {viewMode === "3d" ? <Warehouse3D
+        readOnly
+        heatmap={showHeatmap}
+        followedRobot={followedRobot}
+        onInteract={() => { if (followedRobot) setFollowedRobot(null); }}
+        onRobotSelect={(robotId) => setFollowedRobot(robotId)}
+        state={{
+          width: state.grid?.width ?? 12,
+          height: state.grid?.height ?? 7,
+          blocked: (state.grid?.blocked ?? []).map(([x, y]) => ({ x, y })),
+          obstacles: (state.grid?.obstacles ?? []).map(([x, y]) => ({ x, y })),
+          pickups: state.grid?.pickups ?? [],
+          drops: state.grid?.drops ?? [],
+          tick: state.tick,
+          speed: state.speed,
+          heatmap: state.metrics?.congestion?.heatmap ?? [],
+          deadlock: state.deadlock,
+          robots: robots.map((robot) => ({ id: robot.id, name: robot.id, x: robot.pos[0], y: robot.pos[1], color: "#66d19e", status: robot.status, target: { x: robot.pos[0], y: robot.pos[1] }, path: (robot.path ?? []).map(([x, y]) => [x, y]), waitTicks: robot.wait_ticks, carrying: robot.carrying })),
+        }}
+      /> : <GridCanvas state={state} showHeatmap={showHeatmap} onToggleHeatmap={() => setShowHeatmap((visible) => !visible)} />}
 
       {(state.deadlock?.active || failed) && <section className={`monitor-alert-strip ${failed ? "failed" : "deadlock"}`} role="alert">
         {state.deadlock?.active && <p>Deadlock detected: {cycleText || "cycle unavailable"}</p>}
         {failed && <p>{failed.id} failed, package {strandedPackage} stranded</p>}
       </section>}
+
+      <PredictionsCard />
 
       <section className="monitor-card">
         <h2>Metrics</h2>
@@ -153,7 +189,7 @@ export default function MonitorPage() {
 
       <section className="monitor-card">
         <h2>Robots</h2>
-        <RobotRows robots={robots} />
+        <RobotRows robots={robots} onFollow={(robotId) => setFollowedRobot(robotId)} />
       </section>
 
       <section className="monitor-card">
@@ -163,7 +199,6 @@ export default function MonitorPage() {
 
       <section className="monitor-card monitor-event-card">
         <div className="monitor-card-heading"><h2>Event log</h2><button className={`monitor-chip ${pauseScroll ? "is-selected" : ""}`} onClick={() => setPauseScroll((paused) => !paused)} aria-pressed={pauseScroll}>Pause scroll</button></div>
-        {eventsError && <p className="monitor-event-error">Event history unavailable: {eventsError}</p>}
         <div className="monitor-event-scroll" ref={eventContainer}><EventRows events={visibleEvents} /></div>
       </section>
     </div>

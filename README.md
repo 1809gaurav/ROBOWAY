@@ -68,3 +68,29 @@ Metrics distinguish `planner_rejections` (search states rejected by reservations
 - Scenario jobs become available at their declared `at_tick`.
 - Edit suggestions select a currently configured pickup/drop by Manhattan proximity when the requested route is unavailable.
 - A stranded package remains recoverable at its failure coordinate; a robot that fails before pickup leaves an obstacle at its cell.
+
+## Run everything
+
+From the repository root:
+
+```powershell
+python -m pip install -r requirements.txt
+python run_server.py --host 0.0.0.0 --port 8000
+```
+
+In a second terminal:
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+Open `http://<laptop-ip>:5173` from a phone on the same network. Use the 3D/2D toggle on `/monitor`, tap a robot or choose one from the robot list to follow it, and use "Stop following" to return to normal controls.
+
+Manual verification checklist:
+- Load each of `narrow_passage`, `failed_robot`, and `blocked_aisle`.
+- Start the engine, adjust speed, step while paused, and add a job.
+- Fail a robot and block/unblock a cell.
+- Open the phone monitor, confirm live 3D tracking and WebGL fallback behavior.
+- Stop the backend to see the reconnect banner, restart it, and confirm recovery.

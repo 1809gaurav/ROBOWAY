@@ -13,6 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict
 
+from .ml.predictor import load_predictor
 from .simulation import Simulation
 
 logger = logging.getLogger(__name__)
@@ -25,6 +26,8 @@ clients: set[WebSocket] = set()
 event_cursor = 0
 event_generation = -1
 simulation_generation = 0
+model_predictor = None
+model_name = None
 
 
 class RequestBody(BaseModel):
@@ -169,7 +172,10 @@ async def _simulation_loop() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     global event_cursor, event_generation, simulation_generation
-    global sim_lock, broadcast_lock
+    global sim_lock, broadcast_lock, model_predictor, model_name
+
+    model_predictor = load_predictor()
+    model_name = os.path.basename(os.environ["ROBOWAY_MODEL_PATH"]) if model_predictor and os.environ.get("ROBOWAY_MODEL_PATH") else None
 
     sim_lock = asyncio.Lock()
     broadcast_lock = asyncio.Lock()
@@ -206,6 +212,7 @@ origins.extend(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=list(dict.fromkeys(origins)),
+    allow_origin_regex=r"^(http://192\.168\.\d+\.\d+:5173|http://10\.\d+\.\d+\.\d+:5173|http://172\.(1[6-9]|2\d|3[01])\.\d+\.\d+:5173|https://.*\.trycloudflare\.com|https://.*\.ngrok-free\.app)$",
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -270,6 +277,19 @@ async def pause_simulation() -> dict:
         sim.pause()
     await _broadcast_state()
     return {"ok": True, "status": "paused"}
+
+
+@app.post("/api/sim/step")
+async def step_simulation() -> dict:
+    async with sim_lock:
+        was_paused = sim.snapshot()["status"] == "paused"
+        if was_paused:
+            sim.start()
+        sim.tick()
+        if was_paused:
+            sim.pause()
+    await _broadcast_state()
+    return {"ok": True}
 
 
 @app.post("/api/sim/speed")
@@ -352,6 +372,24 @@ async def get_events(since: int = 0) -> dict:
 async def get_metrics() -> dict:
     async with sim_lock:
         return sim.snapshot()["metrics"]
+
+
+@app.get("/api/ml/status")
+async def ml_status() -> dict:
+    return {"enabled": model_predictor is not None, "model": model_name}
+
+
+@app.post("/api/ml/predict")
+async def ml_predict() -> dict:
+    if model_predictor is None:
+        return JSONResponse(
+            status_code=400,
+            content={"ok": False, "error": "ML_DISABLED", "message": "No ML model is loaded"},
+        )
+    async with sim_lock:
+        snapshot = sim.snapshot()
+    prediction = model_predictor.predict(snapshot)
+    return {"ok": True, "prediction": prediction}
 
 
 @app.websocket("/ws")

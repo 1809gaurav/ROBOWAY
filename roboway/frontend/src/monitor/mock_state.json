@@ -1,0 +1,18 @@
+{
+  "tick": 17,
+  "running": true,
+  "scenario": { "name": "Sample warehouse" },
+  "grid": {
+    "width": 12,
+    "height": 7,
+    "obstacles": [{ "x": 4, "y": 2 }],
+    "pickups": [{ "x": 1, "y": 1 }],
+    "drops": [{ "x": 10, "y": 5 }]
+  },
+  "robots": [
+    { "id": "R1", "x": 2, "y": 3, "status": "moving", "path": [[3, 3], [4, 3]] }
+  ],
+  "jobs": [],
+  "metrics": {},
+  "deadlock": { "active": false, "cycle": [] }
+}

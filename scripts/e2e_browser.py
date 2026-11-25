@@ -126,7 +126,7 @@ def main() -> int:
             desktop.get_by_label("Pickup").select_option("P1")
             desktop.get_by_label("Drop").select_option("D1")
             desktop.get_by_role("button", name="Add job").click()
-            desktop.locator(".job-list").get_by_text("J7", exact=True).wait_for(timeout=8000)
+            desktop.locator(".jobs-panel .job-list").get_by_text("J7", exact=True).wait_for(timeout=8000)
             record("Desktop add job through UI", "PASS")
 
             desktop.get_by_label("Robot").select_option("R4")

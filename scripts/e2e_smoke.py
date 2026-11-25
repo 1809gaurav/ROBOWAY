@@ -89,11 +89,13 @@ class Runner:
         snapshots = [state]
         for _ in range(400):
             current_tick = state["tick"]
+            applied_event = False
             if current_tick in scripted and current_tick not in applied:
                 self.apply_scripted_event(scripted[current_tick])
                 applied.add(current_tick)
+                applied_event = True
             # Scenario scripts must be exercised even if the jobs finish early.
-            if all(job["state"] == "Delivered" for job in state["jobs"]) and len(applied) == len(scripted):
+            if all(job["state"] == "Delivered" for job in state["jobs"]) and len(applied) == len(scripted) and not applied_event:
                 break
             stepped = self.request("POST", "/api/sim/step")
             self.expect(stepped.ok, f"step failed: {stepped.text}")
@@ -138,6 +140,15 @@ class Runner:
         added_id = added_response.json()["job_id"]
         state = self.request("GET", "/api/state").json()
         self.expect(any(job["id"] == added_id for job in state["jobs"]), "new job missing from state")
+        self.request("POST", "/api/sim/pause")
+        candidate = next(job for job in self.request("GET", "/api/state").json()["jobs"] if job["id"] == added_id)
+        before = self.request("GET", "/api/state").json()
+        validation = self.request("POST", "/api/jobs/validate", json={
+            "job_id": candidate["id"], "pickup_id": candidate["pickup_id"], "drop_id": candidate["drop_id"],
+        })
+        self.expect(validation.ok, f"validation failed: {validation.text}")
+        self.expect(before == self.request("GET", "/api/state").json(), "validation mutated state")
+        self.request("POST", "/api/sim/start")
         assigned = False
         for _ in range(40):
             if not self.request("POST", "/api/sim/step").ok:
@@ -148,15 +159,6 @@ class Runner:
                 break
         self.expect(assigned, "added job was not eventually assigned")
         self.request("POST", "/api/sim/pause")
-        candidate = next((job for job in state["jobs"] if job["state"] not in ("PickedUp", "Delivered")), None)
-        if candidate is None:
-            candidate = next(job for job in state["jobs"] if job["state"] == "PickedUp")
-        before = self.request("GET", "/api/state").json()
-        validation = self.request("POST", "/api/jobs/validate", json={
-            "job_id": candidate["id"], "pickup_id": candidate["pickup_id"], "drop_id": candidate["drop_id"],
-        })
-        self.expect(validation.ok, f"validation failed: {validation.text}")
-        self.expect(before == self.request("GET", "/api/state").json(), "validation mutated state")
 
         picked = next((job for job in state["jobs"] if job["state"] == "PickedUp"), None)
         if picked is None:

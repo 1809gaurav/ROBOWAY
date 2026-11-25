@@ -31,7 +31,8 @@ function Stop-Tree([int]$ProcessId) {
 }
 function Stop-Started {
     if ($Started.demo) {
-        try { Invoke-RestMethod -Method Post -Uri "http://localhost:8000/api/sim/pause" -TimeoutSec 2 | Out-Null } catch { }
+        try { Invoke-RestMethod -Method Post -Uri "http://localhost:8000/api/sim/pause" -TimeoutSec 2 | Out-Null }
+        catch { Write-Warn "Could not pause the demo before cleanup: $($_.Exception.Message)" }
     }
     foreach ($key in @("demo", "tunnel", "frontend", "backend")) {
         if ($Started[$key]) { Stop-Tree ([int]$Started[$key]) }

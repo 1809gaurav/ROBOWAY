@@ -20,7 +20,8 @@ if (-not (Test-Path $PidFile)) {
 }
 $pids = Get-Content $PidFile -Raw | ConvertFrom-Json
 if ($pids.demo) {
-    try { Invoke-RestMethod -Method Post -Uri "http://localhost:8000/api/sim/pause" -TimeoutSec 2 | Out-Null } catch { }
+    try { Invoke-RestMethod -Method Post -Uri "http://localhost:8000/api/sim/pause" -TimeoutSec 2 | Out-Null }
+    catch { Write-Host "Could not pause the simulation before stopping processes: $($_.Exception.Message)" -ForegroundColor Yellow }
 }
 foreach ($key in @("demo", "tunnel", "frontend", "backend")) {
     $value = $pids.$key

@@ -93,12 +93,14 @@ class Player:
         applied: set[int] = set()
         state = self.state()
         for _ in range(400):
+            applied_event = False
             if state["tick"] in actions_by_tick and state["tick"] not in applied:
                 event = actions_by_tick[state["tick"]]
                 self.action(event)
                 applied.add(state["tick"])
+                applied_event = True
                 print(f"{scenario['id']}: {event['action']} at tick {state['tick']}", flush=True)
-            if all(job["state"] == "Delivered" for job in state["jobs"]) and len(applied) == len(actions_by_tick):
+            if all(job["state"] == "Delivered" for job in state["jobs"]) and len(applied) == len(actions_by_tick) and not applied_event:
                 return state
             state = self.step()
         raise RuntimeError(f"{scenario['id']} exceeded 400 ticks")
@@ -160,8 +162,8 @@ def main() -> int:
         print(f"Demo player failed: {exc}", file=sys.stderr)
         try:
             player.call("POST", "/api/sim/pause")
-        except Exception:
-            pass
+        except requests.RequestException as pause_error:
+            print(f"Could not pause simulation during cleanup: {pause_error}", file=sys.stderr)
         return 1
 
 

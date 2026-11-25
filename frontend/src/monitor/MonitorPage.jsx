@@ -81,15 +81,15 @@ export default function MonitorPage() {
   const [showHeatmap, setShowHeatmap] = useState(false);
   const [pauseScroll, setPauseScroll] = useState(false);
   const [followedRobot, setFollowedRobot] = useState(null);
-  const [viewMode, setViewMode] = useState(() => {
-    if (window.innerWidth < 360) return "2d";
+  const [webglAvailable] = useState(() => {
     try {
       const canvas = document.createElement("canvas");
-      return canvas.getContext("webgl") || canvas.getContext("experimental-webgl") ? "3d" : "2d";
+      return Boolean(canvas.getContext("webgl") || canvas.getContext("experimental-webgl"));
     } catch {
-      return "2d";
+      return false;
     }
   });
+  const [viewMode, setViewMode] = useState(() => window.innerWidth >= 360 && webglAvailable ? "3d" : "2d");
   const eventContainer = useRef(null);
   const robots = useMemo(() => Array.isArray(state?.robots) ? state.robots : [], [state?.tick, state?.robots]);
   const jobs = useMemo(() => Array.isArray(state?.jobs) ? state.jobs : [], [state?.tick, state?.jobs]);
@@ -142,6 +142,7 @@ export default function MonitorPage() {
         <div className="view-switch"><button className={viewMode === "2d" ? "selected" : ""} onClick={() => setViewMode("2d")}>2D</button><button className={viewMode === "3d" ? "selected" : ""} onClick={() => setViewMode("3d")}>3D</button></div>
         <button className="monitor-chip" onClick={() => setShowHeatmap((visible) => !visible)} aria-pressed={showHeatmap}>Heatmap</button>
       </div>
+      {!webglAvailable && <p className="monitor-webgl-note">WebGL is unavailable; showing the 2D grid instead.</p>}
       {followedRobot && <div className="monitor-follow-chip">Follow {followedRobot} · {robots.find((robot) => robot.id === followedRobot)?.status ?? "n/a"} · Job {robots.find((robot) => robot.id === followedRobot)?.job_id ?? "—"} · Carrying {robots.find((robot) => robot.id === followedRobot)?.carrying ?? "—"} · Wait {robots.find((robot) => robot.id === followedRobot)?.wait_ticks ?? 0}<button onClick={() => setFollowedRobot(null)}>Stop following</button></div>}
       {viewMode === "3d" ? <Warehouse3D
         readOnly

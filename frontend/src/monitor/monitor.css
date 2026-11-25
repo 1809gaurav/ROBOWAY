@@ -68,6 +68,9 @@
 .monitor-card-heading > div > span { display: block; margin-top: 3px; color: var(--monitor-muted); font-size: 14px; }
 .monitor-chip { background: transparent; }
 .monitor-chip.is-selected { border-color: #d89038; background: #563615; color: #ffe0ad; }
+.monitor-view-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.monitor-webgl-note { margin: 0; color: var(--monitor-muted); font-size: 13px; }
+.monitor-follow-chip { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 12px; border: 1px solid var(--monitor-line); border-radius: 9px; background: var(--monitor-panel); }
 .monitor-canvas-wrap { height: min(58vh, 500px); min-height: 250px; margin-top: 12px; overflow: hidden; border: 1px solid var(--monitor-line); border-radius: 8px; background: var(--monitor-canvas); }
 .monitor-canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
 .monitor-canvas:active { cursor: grabbing; }

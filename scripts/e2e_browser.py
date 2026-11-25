@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import os
 import signal
+import socket
 import subprocess
 import sys
 import time
@@ -15,10 +16,11 @@ import requests
 
 ROOT = Path(__file__).resolve().parents[1]
 ARTIFACTS = ROOT / "artifacts"
-API = "http://localhost:8000"
+API = "http://127.0.0.1:8000"
 FRONTEND = "http://localhost:5173"
 PID_FILE = ROOT / "logs" / "pids.json"
 CHECKS: list[tuple[str, str, str]] = []
+LAST_HTTP_ERROR = ""
 
 
 def record(name: str, outcome: str, details: str = "") -> None:
@@ -26,15 +28,24 @@ def record(name: str, outcome: str, details: str = "") -> None:
 
 
 def wait_http(url: str, timeout: float) -> bool:
+    global LAST_HTTP_ERROR
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         try:
             if requests.get(url, timeout=1).ok:
                 return True
-        except requests.RequestException:
-            pass
+        except requests.RequestException as exc:
+            LAST_HTTP_ERROR = str(exc)
         time.sleep(0.25)
     return False
+
+
+def tcp_port_open(host: str, port: int) -> bool:
+    try:
+        with socket.create_connection((host, port), timeout=0.25):
+            return True
+    except OSError:
+        return False
 
 
 def read_pids() -> dict:
@@ -43,28 +54,69 @@ def read_pids() -> dict:
     return json.loads(PID_FILE.read_text(encoding="utf-8-sig"))
 
 
-def terminate_pid(pid: int) -> None:
-    if os.name == "nt":
+def terminate_backend(pid: int) -> None:
+    if os.name != "nt":
         os.kill(pid, signal.SIGTERM)
-    else:
-        os.kill(pid, signal.SIGTERM)
+        return
+    command = f"""
+function Stop-BackendTree([int]$ProcessId) {{
+    $children = Get-CimInstance Win32_Process -Filter "ParentProcessId = $ProcessId" -ErrorAction SilentlyContinue
+    foreach ($child in $children) {{ Stop-BackendTree ([int]$child.ProcessId) }}
+    if (Get-Process -Id $ProcessId -ErrorAction SilentlyContinue) {{
+        Stop-Process -Id $ProcessId -Force -ErrorAction Stop
+    }}
+}}
+Stop-BackendTree {pid}
+"""
+    result = subprocess.run(
+        ["powershell", "-NoProfile", "-Command", command],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"Could not stop backend process tree {pid}: {result.stderr.strip()}")
+
+
+def powershell_quote(value: str | Path) -> str:
+    return "'" + str(value).replace("'", "''") + "'"
 
 
 def restart_backend() -> int:
     python = ROOT / ".venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
-    log = ROOT / "logs" / "backend.log"
-    with log.open("a", encoding="utf-8") as output:
-        process = subprocess.Popen(
-            [str(python), "-u", "run_server.py", "--host", "0.0.0.0", "--port", "8000"],
-            cwd=ROOT,
-            stdout=output,
-            stderr=subprocess.STDOUT,
-            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0,
+    log = ROOT / "logs" / "backend-restart.log"
+    if os.name == "nt":
+        error_log = ROOT / "logs" / "backend-restart-error.log"
+        command = (
+            f"$process = Start-Process -FilePath {powershell_quote(python)} "
+            "-ArgumentList @('-u','run_server.py','--host','0.0.0.0','--port','8000') "
+            f"-WorkingDirectory {powershell_quote(ROOT)} "
+            f"-RedirectStandardOutput {powershell_quote(log)} "
+            f"-RedirectStandardError {powershell_quote(error_log)} -PassThru; $process.Id"
         )
+        result = subprocess.run(
+            ["powershell", "-NoProfile", "-Command", command],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode != 0 or not result.stdout.strip().isdigit():
+            raise RuntimeError(f"Could not restart backend: {result.stderr.strip() or result.stdout.strip()}")
+        process_pid = int(result.stdout.strip())
+    else:
+        with log.open("w", encoding="utf-8") as output:
+            process = subprocess.Popen(
+                [str(python), "-u", "run_server.py", "--host", "0.0.0.0", "--port", "8000"],
+                cwd=ROOT,
+                stdin=subprocess.DEVNULL,
+                stdout=output,
+                stderr=subprocess.STDOUT,
+            )
+        process_pid = process.pid
     pids = read_pids()
-    pids["backend"] = process.pid
+    pids["backend"] = process_pid
     PID_FILE.write_text(json.dumps(pids, indent=2), encoding="utf-8")
-    return process.pid
+    return process_pid
 
 
 def print_results() -> None:
@@ -105,7 +157,7 @@ def main() -> int:
 
         try:
             desktop.goto(FRONTEND, wait_until="networkidle", timeout=20000)
-            desktop.get_by_role("button", name="Simulator").click()
+            desktop.get_by_role("button", name="Simulator", exact=True).click()
             desktop.locator("canvas").first.wait_for(timeout=10000)
             record("Desktop simulator + canvas", "PASS")
             desktop.screenshot(path=str(ARTIFACTS / "desktop-simulator.png"), full_page=True)
@@ -178,16 +230,31 @@ def main() -> int:
 
         try:
             backend_pid = int(read_pids()["backend"])
-            terminate_pid(backend_pid)
+            terminate_backend(backend_pid)
             deadline = time.monotonic() + 6
-            while time.monotonic() < deadline and wait_http(f"{API}/health", 0.3):
+            while time.monotonic() < deadline and tcp_port_open("127.0.0.1", 8000):
                 time.sleep(0.2)
+            if tcp_port_open("127.0.0.1", 8000):
+                raise AssertionError("backend TCP listener remained open after stopping its recorded process tree")
             mobile.locator(".monitor-connection").get_by_text("Disconnected, retrying...", exact=True).wait_for(timeout=6000)
             record("Backend disconnect banner", "PASS")
 
             new_pid = restart_backend()
             if not wait_http(f"{API}/health", 10):
-                raise AssertionError(f"restarted backend PID {new_pid} did not become healthy within 10 seconds")
+                restart_log = ROOT / "logs" / "backend-restart.log"
+                tail = restart_log.read_text(encoding="utf-8", errors="replace").splitlines()[-12:] if restart_log.exists() else []
+                process_status = "unknown"
+                if os.name == "nt":
+                    process_status = subprocess.run(
+                        ["powershell", "-NoProfile", "-Command", f"Get-Process -Id {new_pid} -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Id"],
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    ).stdout.strip() or "not running"
+                raise AssertionError(
+                    f"restarted backend PID {new_pid} (after terminating {backend_pid}) did not become healthy within 10 seconds "
+                    f"(process lookup: {process_status}); last probe: {LAST_HTTP_ERROR}; restart log tail: {' | '.join(tail)}"
+                )
             mobile.locator(".monitor-connection").get_by_text("Live", exact=True).wait_for(timeout=10000)
             record("Backend restart reconnect", "PASS")
         except Exception as exc:

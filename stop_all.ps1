@@ -7,6 +7,11 @@ function Stop-Tree([int]$ProcessId) {
     if ($env:OS -eq "Windows_NT") {
         $children = Get-CimInstance Win32_Process -Filter "ParentProcessId = $ProcessId" -ErrorAction SilentlyContinue
         foreach ($child in $children) { Stop-Tree ([int]$child.ProcessId) }
+    } elseif (Get-Command ps -ErrorAction SilentlyContinue) {
+        foreach ($line in (& ps -eo pid=,ppid=)) {
+            $parts = "$line".Trim() -split "\s+"
+            if ($parts.Length -eq 2 -and [int]$parts[1] -eq $ProcessId) { Stop-Tree ([int]$parts[0]) }
+        }
     }
     if (Get-Process -Id $ProcessId -ErrorAction SilentlyContinue) {
         Stop-Process -Id $ProcessId -Force -ErrorAction SilentlyContinue
@@ -20,7 +25,7 @@ if (-not (Test-Path $PidFile)) {
 }
 $pids = Get-Content $PidFile -Raw | ConvertFrom-Json
 if ($pids.demo) {
-    try { Invoke-RestMethod -Method Post -Uri "http://localhost:8000/api/sim/pause" -TimeoutSec 2 | Out-Null }
+    try { Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8000/api/sim/pause" -TimeoutSec 2 | Out-Null }
     catch { Write-Host "Could not pause the simulation before stopping processes: $($_.Exception.Message)" -ForegroundColor Yellow }
 }
 foreach ($key in @("demo", "tunnel", "frontend", "backend")) {

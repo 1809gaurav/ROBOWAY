@@ -29,7 +29,7 @@ function Wait-Health([int]$Seconds) {
     $deadline = (Get-Date).AddSeconds($Seconds)
     while ((Get-Date) -lt $deadline) {
         try {
-            $response = Invoke-WebRequest "http://localhost:8000/health" -TimeoutSec 2 -UseBasicParsing
+            $response = Invoke-WebRequest "http://127.0.0.1:8000/health" -TimeoutSec 2 -UseBasicParsing
             if ($response.StatusCode -eq 200) { return $true }
         } catch { Start-Sleep -Milliseconds 500 }
     }
@@ -53,7 +53,7 @@ try {
             Run-External "pytest -q" { Set-Location $Root; & $VenvPython -m pytest -q }
             Run-External "npm run build" { Set-Location (Join-Path $Root "frontend"); npm run build }
             Run-External "npm test" { Set-Location (Join-Path $Root "frontend"); npm test }
-            Run-External "e2e_smoke.py" { Set-Location $Root; & $VenvPython "scripts/e2e_smoke.py" --api "http://localhost:8000" }
+            Run-External "e2e_smoke.py" { Set-Location $Root; & $VenvPython "scripts/e2e_smoke.py" --api "http://127.0.0.1:8000" }
             Run-External "e2e_browser.py" { Set-Location $Root; & $VenvPython "scripts/e2e_browser.py" }
         }
     }

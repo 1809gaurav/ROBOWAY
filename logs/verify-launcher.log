@@ -1,0 +1,83 @@
+[ROBOWAY] Checking Python and Node.js prerequisites
+[  OK  ] Python 3.13.5
+[  OK  ] Node.js v23.11.0
+[ROBOWAY] Installing backend dependencies
+Requirement already satisfied: fastapi in c:\users\dell\documents\roboway\.venv\lib\site-packages (from -r C:\Users\DELL\Documents\ROBOWAY\requirements.txt (line 1)) (0.165.0)
+Requirement already satisfied: qrcode in c:\users\dell\documents\roboway\.venv\lib\site-packages (from -r C:\Users\DELL\Documents\ROBOWAY\requirements.txt (line 3)) (8.2)
+Requirement already satisfied: uvicorn[standard] in c:\users\dell\documents\roboway\.venv\lib\site-packages (from -r C:\Users\DELL\Documents\ROBOWAY\requirements.txt (line 2)) (0.54.0)
+Requirement already satisfied: starlette>=1.6.0 in c:\users\dell\documents\roboway\.venv\lib\site-packages (from fastapi->-r C:\Users\DELL\Documents\ROBOWAY\requirements.txt (line 1)) (1.10.0)
+Requirement already satisfied: anyio>=4.1.0 in c:\users\dell\documents\roboway\.venv\lib\site-packages (from fastapi->-r C:\Users\DELL\Documents\ROBOWAY\requirements.txt (line 1)) (4.16.0)
+Requirement already satisfied: pydantic>=2.9.0 in c:\users\dell\documents\roboway\.venv\lib\site-packages (from fastapi->-r C:\Users\DELL\Documents\ROBOWAY\requirements.txt (line 1)) (2.14.4)
+Requirement already satisfied: typing-extensions>=4.8.0 in c:\users\dell\documents\roboway\.venv\lib\site-packages (from fastapi->-r C:\Users\DELL\Documents\ROBOWAY\requirements.txt (line 1)) (4.16.0)
+Requirement already satisfied: typing-inspection>=0.4.2 in c:\users\dell\documents\roboway\.venv\lib\site-packages (from fastapi->-r C:\Users\DELL\Documents\ROBOWAY\requirements.txt (line 1)) (0.4.5)
+Requirement already satisfied: annotated-doc>=0.0.2 in c:\users\dell\documents\roboway\.venv\lib\site-packages (from fastapi->-r C:\Users\DELL\Documents\ROBOWAY\requirements.txt (line 1)) (0.0.7)
+Requirement already satisfied: opentelemetry-api>=1.44.0 in c:\users\dell\documents\roboway\.venv\lib\site-packages (from fastapi->-r C:\Users\DELL\Documents\ROBOWAY\requirements.txt (line 1)) (1.45.2)
+Requirement already satisfied: click>=7.0 in c:\users\dell\documents\roboway\.venv\lib\site-packages (from uvicorn[standard]->-r C:\Users\DELL\Documents\ROBOWAY\requirements.txt (line 2)) (8.5.1)
+Requirement already satisfied: h11>=0.8 in c:\users\dell\documents\roboway\.venv\lib\site-packages (from uvicorn[standard]->-r C:\Users\DELL\Documents\ROBOWAY\requirements.txt (line 2)) (0.16.0)
+Requirement already satisfied: httptools>=0.8.0 in c:\users\dell\documents\roboway\.venv\lib\site-packages (from uvicorn[standard]->-r C:\Users\DELL\Documents\ROBOWAY\requirements.txt (line 2)) (0.9.0)
+Requirement already satisfied: python-dotenv>=0.13 in c:\users\dell\documents\roboway\.venv\lib\site-packages (from uvicorn[standard]->-r C:\Users\DELL\Documents\ROBOWAY\requirements.txt (line 2)) (1.2.4)
+Requirement already satisfied: pyyaml>=5.1 in c:\users\dell\documents\roboway\.venv\lib\site-packages (from uvicorn[standard]->-r C:\Users\DELL\Documents\ROBOWAY\requirements.txt (line 2)) (6.0.4)
+Requirement already satisfied: watchfiles>=0.20 in c:\users\dell\documents\roboway\.venv\lib\site-packages (from uvicorn[standard]->-r C:\Users\DELL\Documents\ROBOWAY\requirements.txt (line 2)) (1.3.0)
+Requirement already satisfied: websockets>=13.0 in c:\users\dell\documents\roboway\.venv\lib\site-packages (from uvicorn[standard]->-r C:\Users\DELL\Documents\ROBOWAY\requirements.txt (line 2)) (17.4)
+Requirement already satisfied: colorama in c:\users\dell\documents\roboway\.venv\lib\site-packages (from qrcode->-r C:\Users\DELL\Documents\ROBOWAY\requirements.txt (line 3)) (0.4.6)
+Requirement already satisfied: idna>=2.8 in c:\users\dell\documents\roboway\.venv\lib\site-packages (from anyio>=4.1.0->fastapi->-r C:\Users\DELL\Documents\ROBOWAY\requirements.txt (line 1)) (3.20)
+Requirement already satisfied: annotated-types>=0.6.0 in c:\users\dell\documents\roboway\.venv\lib\site-packages (from pydantic>=2.9.0->fastapi->-r C:\Users\DELL\Documents\ROBOWAY\requirements.txt (line 1)) (0.8.0)
+Requirement already satisfied: pydantic-core==2.50.5 in c:\users\dell\documents\roboway\.venv\lib\site-packages (from pydantic>=2.9.0->fastapi->-r C:\Users\DELL\Documents\ROBOWAY\requirements.txt (line 1)) (2.50.5)
+[  OK  ] frontend/node_modules already exists; skipping npm install
+[ROBOWAY] Detecting LAN IPv4 address
+[  OK  ] LAN IPv4: 172.18.0.158
+[ INFO ] Not running as Administrator; continuing without firewall changes.
+Run these two commands in an elevated PowerShell shell to allow phone access:
+New-NetFirewallRule -DisplayName "ROBOWAY TCP 8000" -Direction Inbound -Action Allow -Protocol TCP -LocalPort 8000
+New-NetFirewallRule -DisplayName "ROBOWAY TCP 5173" -Direction Inbound -Action Allow -Protocol TCP -LocalPort 5173
+[ROBOWAY] Starting backend; output: logs/backend.log
+[ROBOWAY] Starting frontend; output: logs/frontend.log
+[  OK  ] Backend is ready at http://localhost:8000/health
+[  OK  ] Frontend is ready at http://localhost:5173/
+[  OK  ] Loaded narrow_passage and left it paused
+
++------------------------------------------------------------+
+| ROBOWAY READY                                              |
+| Dashboard:     http://172.18.0.158:5173
+| Phone monitor: http://172.18.0.158:5173/monitor?api=http%3A%2F%2F172.18.0.158%3A8000
+| API state:     http://172.18.0.158:8000/api/state
+| ML: disabled, no model loaded
+| Logs:          C:\Users\DELL\Documents\ROBOWAY\logs
++------------------------------------------------------------+
+Phone monitor QR:
+                                                                      
+  ##############  ########  ##      ##########  ##    ##############  
+  ##          ##  ##  ####  ############  ##      ##  ##          ##  
+  ##  ######  ##  ####  ############  ####  ##    ##  ##  ######  ##  
+  ##  ######  ##      ##      ##  ######          ##  ##  ######  ##  
+  ##  ######  ##  ######    ##  ######  ##########    ##  ######  ##  
+  ##          ##      ##  ####  ####  ##          ##  ##          ##  
+  ##############  ##  ##  ##  ##  ##  ##  ##  ##  ##  ##############  
+                      ########  ####    ####    ####                  
+  ##    ################  ####      ##  ##  ##########    ##  ######  
+  ##  ######    ##        ######  ##  ######  ########  ##  ####      
+    ##  ##  ####  ##      ####    ########      ##  ####  ########    
+          ####  ####  ##  ####  ####      ##  ##############  ####    
+    ####      ##  ##  ##  ####    ####  ##  ####    ########    ##    
+          ####  ##  ########  ##    ######  ########                  
+    ####  ##########    ######################      ##    ####        
+    ####          ####    ####    ##      ######          ######  ##  
+    ##      ######  ####    ########        ##        ##########      
+      ##  ####  ##          ##  ##  ##    ##  ######    ##    ##      
+        ##    ##            ######    ##      ##      ##    ####  ##  
+            ##  ##            ####    ##    ####  ##  ##########      
+    ######    ######  ##  ##  ######    ##  ##    ############  ##    
+  ####    ####    ##              ######  ####    ##  ##      ##      
+  ##  ####    ############  ######    ##################  ##    ####  
+  ##    ######    ####  ##    ##  ####    ##########      ####        
+  ######      ######    ####    ####    ####  ##  ############    ##  
+                  ####          ##        ####  ####      ##  ######  
+  ##############  ##  ####  ##          ##      ####  ##  ##  ######  
+  ##          ##  ######        ################  ##      ##  ####    
+  ##  ######  ##  ##  ##  ##  ##      ##  ######  ############        
+  ##  ######  ##  ##    ####      ####  ####  ##    ####    ####      
+  ##  ######  ##      ##  ##########  ##########  ##    ##      ####  
+  ##          ##        ####  ##  ##        ##      ##          ####  
+  ##############  ####  ##  ########    ##      ##      ####          
+                                                                      
+Press Ctrl+C to stop ROBOWAY, or run .\stop_all.ps1 in another PowerShell window.

@@ -25,19 +25,38 @@ function Stop-Tree([int]$ProcessId) {
     if ($env:OS -eq "Windows_NT") {
         $children = Get-CimInstance Win32_Process -Filter "ParentProcessId = $ProcessId" -ErrorAction SilentlyContinue
         foreach ($child in $children) { Stop-Tree ([int]$child.ProcessId) }
+    } elseif (Get-Command ps -ErrorAction SilentlyContinue) {
+        foreach ($line in (& ps -eo pid=,ppid=)) {
+            $parts = "$line".Trim() -split "\s+"
+            if ($parts.Length -eq 2 -and [int]$parts[1] -eq $ProcessId) { Stop-Tree ([int]$parts[0]) }
+        }
     }
     $process = Get-Process -Id $ProcessId -ErrorAction SilentlyContinue
     if ($process) { Stop-Process -Id $ProcessId -Force -ErrorAction SilentlyContinue }
 }
 function Stop-Started {
     if ($Started.demo) {
-        try { Invoke-RestMethod -Method Post -Uri "http://localhost:8000/api/sim/pause" -TimeoutSec 2 | Out-Null }
+        try { Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8000/api/sim/pause" -TimeoutSec 2 | Out-Null }
         catch { Write-Warn "Could not pause the demo before cleanup: $($_.Exception.Message)" }
     }
     foreach ($key in @("demo", "tunnel", "frontend", "backend")) {
         if ($Started[$key]) { Stop-Tree ([int]$Started[$key]) }
     }
     if (Test-Path $PidFile) { Remove-Item $PidFile -Force -ErrorAction SilentlyContinue }
+}
+function Assert-PortAvailable([int]$Port) {
+    $owners = @()
+    if ($env:OS -eq "Windows_NT" -and (Get-Command Get-NetTCPConnection -ErrorAction SilentlyContinue)) {
+        $owners = @(Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue |
+            Select-Object -ExpandProperty OwningProcess -Unique)
+    }
+    $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Any, $Port)
+    try { $listener.Start() }
+    catch {
+        $ownerText = if ($owners.Count -gt 0) { " Listener PID(s): $($owners -join ', ')." } else { "" }
+        throw "TCP port $Port is already in use.$ownerText Stop the process using this port, then rerun .\start_all.ps1."
+    }
+    finally { $listener.Stop() }
 }
 function Read-Tail([string]$Path) {
     if (Test-Path $Path) {
@@ -49,9 +68,10 @@ function Read-Tail([string]$Path) {
 }
 function Wait-Url([string]$Url, [string]$Name, [string]$LogPath) {
     $deadline = (Get-Date).AddSeconds(30)
+    $probeUrl = $Url -replace "^http://localhost", "http://127.0.0.1"
     while ((Get-Date) -lt $deadline) {
         try {
-            $response = Invoke-WebRequest -Uri $Url -TimeoutSec 2 -UseBasicParsing
+            $response = Invoke-WebRequest -Uri $probeUrl -TimeoutSec 2 -UseBasicParsing
             if ($response.StatusCode -ge 200 -and $response.StatusCode -lt 500) {
                 Write-Ok "$Name is ready at $Url"
                 return
@@ -76,6 +96,8 @@ try {
         }
         Remove-Item $PidFile -Force
     }
+    Assert-PortAvailable 8000
+    Assert-PortAvailable 5173
 
     Write-Step "Checking Python and Node.js prerequisites"
     $pythonCommand = Get-Command python -ErrorAction SilentlyContinue
@@ -178,7 +200,7 @@ try {
     $frontendLog = $FrontendLog.Replace('"', '""')
     if ($env:OS -eq "Windows_NT") {
         $npm = (Get-Command npm.cmd -ErrorAction Stop).Source
-        $command = 'set "VITE_API_BASE={0}"&& cd /d "{1}"&& call "{2}" run dev -- --host 0.0.0.0 >> "{3}" 2>&1' -f $ApiBase, $Frontend, $npm, $frontendLog
+        $command = 'set "VITE_API_BASE={0}"&& cd /d "{1}"&& call "{2}" run dev -- --host 0.0.0.0 < NUL >> "{3}" 2>&1' -f $ApiBase, $Frontend, $npm, $frontendLog
         $front = Start-Process -FilePath $env:ComSpec -ArgumentList @("/c", $command) -WorkingDirectory $Root -PassThru
     } else {
         $oldApiBase = $env:VITE_API_BASE
@@ -191,18 +213,18 @@ try {
 
     Wait-Url "http://localhost:8000/health" "Backend" $BackendLog
     Wait-Url "http://localhost:5173/" "Frontend" $FrontendLog
-    $null = Invoke-Api "POST" "http://localhost:8000/api/scenarios/narrow_passage/load"
+    $null = Invoke-Api "POST" "http://127.0.0.1:8000/api/scenarios/narrow_passage/load"
     if ($Demo) {
-        $null = Invoke-Api "POST" "http://localhost:8000/api/sim/start"
+        $null = Invoke-Api "POST" "http://127.0.0.1:8000/api/sim/start"
         Write-Ok "Loaded narrow_passage and started the demo simulation"
     } else {
-        $null = Invoke-Api "POST" "http://localhost:8000/api/sim/pause"
+        $null = Invoke-Api "POST" "http://127.0.0.1:8000/api/sim/pause"
         Write-Ok "Loaded narrow_passage and left it paused"
     }
 
     $dashboard = "http://${LanIp}:5173"
     $phone = "http://${LanIp}:5173/monitor?api=$([uri]::EscapeDataString($ApiBase))"
-    $ml = Invoke-Api "GET" "http://localhost:8000/api/ml/status"
+    $ml = Invoke-Api "GET" "http://127.0.0.1:8000/api/ml/status"
     if ($ml.enabled) { $mlText = "ML: enabled, model $($ml.model)" } else { $mlText = "ML: disabled, no model loaded" }
     Write-Host ""
     Write-Host "+------------------------------------------------------------+" -ForegroundColor Green
@@ -248,7 +270,12 @@ try {
         Save-Pids
         Write-Ok "Hands-free demo player started; output: logs/demo.log"
     }
-    if (-not $NoBrowser) { Start-Process $dashboard }
+    if (-not $NoBrowser) {
+        if ($env:OS -eq "Windows_NT") { Start-Process $dashboard }
+        elseif ($IsMacOS -and (Get-Command open -ErrorAction SilentlyContinue)) { Start-Process open -ArgumentList $dashboard }
+        elseif (Get-Command xdg-open -ErrorAction SilentlyContinue) { Start-Process xdg-open -ArgumentList $dashboard }
+        else { Write-Warn "No desktop browser opener was found; open $dashboard manually." }
+    }
     Write-Host "Press Ctrl+C to stop ROBOWAY, or run .\stop_all.ps1 in another PowerShell window." -ForegroundColor Cyan
     if ($Demo) {
         while ($true) { Start-Sleep -Seconds 2 }

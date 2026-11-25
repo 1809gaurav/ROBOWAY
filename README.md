@@ -1,180 +1,343 @@
 <div align="center">
 
-<img src="assets/banner.svg" alt="ROBOWAY" width="100%"/>
+<img src="assets/banner.svg" alt="ROBOWAY: Warehouse Robot Coordination Arena" width="100%">
 
-### `> test your robot fleet before you buy one_`
+<br>
 
-![python](https://img.shields.io/badge/FastAPI-00ff88?style=for-the-badge&logo=fastapi&logoColor=black&labelColor=000000)
-![react](https://img.shields.io/badge/React%20%2B%20Vite-00d4ff?style=for-the-badge&logo=react&logoColor=black&labelColor=000000)
-![three](https://img.shields.io/badge/Three.js-b6ff3b?style=for-the-badge&logo=threedotjs&logoColor=black&labelColor=000000)
-![sim](https://img.shields.io/badge/Simulation-Deterministic-00ff88?style=for-the-badge&labelColor=000000)
-![hack](https://img.shields.io/badge/NexHack_2.0-PS5_Robotics-00ff88?style=for-the-badge&labelColor=000000)
+![NexHack 2.0](https://img.shields.io/badge/NexHack_2.0-Geeta_University-19e6c8?style=for-the-badge&labelColor=04100d)
+![Problem Statement](https://img.shields.io/badge/Problem_Statement_5-Robotics-39ff88?style=for-the-badge&labelColor=04100d)
+![Simulated](https://img.shields.io/badge/Robots-100%25_Simulated-b6f26b?style=for-the-badge&labelColor=04100d)
 
-**A free, browser-based sandbox for multi-robot coordination, deadlocks and failure recovery.**
-**Every decision is explained in a human-readable event log.**
+![Python](https://img.shields.io/badge/Python-3.11+-19e6c8?style=flat-square&logo=python&logoColor=19e6c8&labelColor=04100d)
+![FastAPI](https://img.shields.io/badge/FastAPI-WebSocket-39ff88?style=flat-square&logo=fastapi&logoColor=39ff88&labelColor=04100d)
+![React](https://img.shields.io/badge/React-Vite_+_TS-19e6c8?style=flat-square&logo=react&logoColor=19e6c8&labelColor=04100d)
+![Three.js](https://img.shields.io/badge/Three.js-React_Three_Fiber-39ff88?style=flat-square&logo=threedotjs&logoColor=39ff88&labelColor=04100d)
+
+### Test your robot fleet before you buy one.
+
+A free, browser-based sandbox for multi-robot coordination and failure recovery.<br>
+Every decision the fleet makes is explained in a human-readable event log.
+
+<br>
+
+[**Live preview**](#-live-preview) · [**Screenshots**](#-screenshots) · [**How it works**](#-how-it-works) · [**Demo scenarios**](#-three-demo-scenarios) · [**Quick start**](#-quick-start) · [**Phone monitor**](#-monitor-from-your-phone)
+
+<img src="assets/divider.svg" alt="" width="100%">
 
 </div>
 
----
-
-## `01 // THE PROBLEM`
-
-Each robot has a valid shortest path. Put ten of them in one-tile-wide aisles and you get:
-
-| Head-on | Swap | Deadlock | Robot failure | Blocked aisle |
-|:--:|:--:|:--:|:--:|:--:|
-| face-off in a 1-cell aisle | two robots exchange cells | circular standoff | package left stranded | route closes mid-shift |
-
-## `02 // WHAT ROBOWAY DOES`
-
-| Capability | How |
-|---|---|
-| **Model the arena** | Grid, obstacles, pickups, drops, 5+ robots, add jobs while running |
-| **Route in space and time** | Greedy nearest-robot assignment + Space-Time A* + reservation table of `(x, y, t)` |
-| **Prevent conflicts** | Vertex and edge (swap) checks, plus a runtime invariant checker every tick |
-| **Handle deadlocks** | Wait-for graph or stall threshold, then yield, back-off and replan |
-| **Recover failures** | Failed robot becomes an obstacle; package goes back to *Waiting* or becomes *Stranded*; one owner at all times |
-| **Adapt live** | Click to block or unblock a cell; only affected robots replan; no reset |
-| **Measure** | Completed jobs, waiting time, congestion heatmap, conflicts prevented, JSON log export |
-
-> **Honest claim:** RoboWay does **not** claim zero deadlocks. It *prevents* where possible (reservations), *detects* (wait-for graph / stall), and *recovers* (back-off). Dense grids can still deadlock.
-
-## `03 // ARCHITECTURE`
+## ⚡ Live preview
 
 <div align="center">
-<img src="assets/architecture.svg" alt="RoboWay architecture" width="100%"/>
+<img src="assets/sim-preview.svg" alt="Animated illustration: robots crossing a one-cell aisle, one waiting, a blocked cell blinking, and the event log cycling" width="100%">
+<br>
+<sub>Illustrative animation of the idea: one robot crosses the one-cell aisle, another waits and follows, and the log explains why. The real simulator is shown below.</sub>
 </div>
 
-The server is the single source of truth. The 2D and 3D views only render the same state JSON and send commands.
+<img src="assets/divider.svg" alt="" width="100%">
 
-**Per tick:** apply commands → assign jobs → replan invalid routes → check conflicts and deadlocks → advance robots → update metrics and log → broadcast one state snapshot.
+## 🖥️ Screenshots
 
-## `04 // THREE LAYERS AGAINST DEADLOCK`
+**Simulator dashboard**, with scenario picker, speed, add job, fail robot, block mode and heatmap controls:
+
+<div align="center">
+<img src="assets/screenshots/desktop-simulator.png" alt="ROBOWAY simulator dashboard in 3D view" width="100%">
+</div>
+
+<br>
+
+**Robot failure and recovery running live.** R4 has failed, J4 is `Stranded`, and the other robots keep delivering. Every package still has exactly one owner:
+
+<div align="center">
+<img src="assets/screenshots/desktop-failure-top.png" alt="Failure scenario: R4 failed, package stranded, metrics updating" width="100%">
+</div>
+
+<br>
+
+**Phone monitor**, a read-only live view you open by scanning a QR code (2D or 3D, tap a robot to follow it):
+
+<div align="center">
+<img src="assets/screenshots/mobile-monitor.png" alt="Phone monitor showing the 3D warehouse, failure alert and live metrics" width="320">
+<br>
+<sub>Same state stream as the dashboard, on a phone. The full page also lists robots, jobs and the event log.</sub>
+</div>
+
+<details>
+<summary><b>See the full phone page</b></summary>
+<br>
+<div align="center">
+<img src="assets/screenshots/mobile-monitor-full.png" alt="Full phone monitor page with robots, jobs and event log" width="300">
+</div>
+</details>
+
+<img src="assets/divider.svg" alt="" width="100%">
+
+## 🎯 What it solves
+
+Fleets of warehouse robots fail in four predictable ways. ROBOWAY lets you reproduce each one, watch it, and see the recovery:
+
+| Failure | What happens in ROBOWAY |
+|---|---|
+| 💥 **Collisions in shared aisles** | Routes are planned in space **and** time with a reservation table, so no two robots share a cell and none swap head-on |
+| 🔒 **Deadlocks in narrow passages** | Detected with a wait-for graph and a stall threshold, then resolved by yielding and backoff |
+| 📦 **Robot failures with package loss** | Work is reassigned. A package is never carried or delivered by two robots, and completed deliveries are never touched |
+| 🚧 **Blocked aisles mid-shift** | Click a cell to block it. Only the affected robots replan, and the simulation never resets |
+
+<div align="center">
+
+### The six mandatory requirements, mapped
+
+</div>
+
+| # | Requirement | Where to see it |
+|---|---|---|
+| 1 | Configurable arena, live job adding | Scenario picker, **Add job** while running |
+| 2 | Assign and route in space and time | Planned-route lines, Space-Time A* + reservations |
+| 3 | No collisions or swaps, deadlock recovery | `invariant_violations` stays **0**, deadlock events in the log |
+| 4 | Failure recovery with correct ownership | **Fail robot**, `Stranded` then recovered, one `DELIVERED` per job |
+| 5 | Adapt to disruptions without reset | **Block mode**, `REPLAN` events, tick counter keeps running |
+| 6 | Measure the fleet | Metrics panel: completed jobs, waiting time, congestion |
+
+<img src="assets/divider.svg" alt="" width="100%">
+
+## 🧠 How it works
+
+<div align="center">
+<img src="assets/pipeline.svg" alt="Assign, plan, resolve, recover" width="100%">
+</div>
+
+<br>
+
+1. **Assign:** each waiting job goes to the nearest free robot, using real path cost rather than straight-line distance.
+2. **Plan:** Space-Time A* searches `(x, y, t)` states against a reservation table (prioritized planning). Robots can wait as well as move.
+3. **Resolve:** vertex and swap conflicts are blocked at planning time and re-checked every tick. If robots still stall, the engine builds a wait-for graph, picks a victim, and has it yield and back off.
+4. **Recover:** when a robot fails, its job goes back to `Waiting` (before pickup) or becomes `Stranded` at the failure cell (after pickup) and another robot completes it.
+
+**Package ownership state machine**
+
+```text
+Waiting ──assign──▶ Assigned(R) ──pickup──▶ PickedUp(R) ──drop──▶ Delivered
+   ▲                    │                        │
+   └──── R fails ───────┘                        └── R fails ──▶ Stranded ──▶ Assigned(R2) ──▶ PickedUp(R2)
+```
+
+Invariants are checked every tick: one owner per job, one job per robot, delivered jobs never change, no vertex or swap conflicts. Any breach is counted and logged, and the target is always `0`.
+
+### Architecture
 
 ```mermaid
 flowchart LR
-  A([Plan with reservations]):::p --> B{Wait cycle or stall > 6 ticks?}
-  B -- no --> C([Keep moving]):::p
-  B -- yes --> D[DEADLOCK_DETECTED]:::d
-  D --> E[Pick lowest-priority victim]
-  E --> F[Yield to nearest pull-out cell]
-  F --> G[Others replan, victim backs off 2-5 ticks]
-  G --> H{Still stalled after 2 tries?}
-  H -- no --> I[DEADLOCK_RESOLVED]:::p
-  H -- yes --> J[Job returns to Waiting, reassigned]:::d
-  classDef p fill:#04100a,stroke:#00ff88,color:#b8ffd9
-  classDef d fill:#1a0508,stroke:#ff3b5c,color:#ffd0d8
+    subgraph Engine["Python engine (single source of truth)"]
+        A[Assigner] --> P[Space-Time A* + reservations]
+        P --> C[Conflict checker]
+        C --> D[Deadlock detector]
+        D --> F[Failure handler]
+        F --> M[Metrics + event log]
+    end
+    Engine -->|REST commands| S[FastAPI server]
+    S -->|WebSocket state + events| W[Web dashboard<br/>2D + 3D]
+    S -->|WebSocket state + events| H[Phone monitor<br/>read-only]
+    N[scenarios/*.json] --> Engine
 ```
 
-## `05 // PACKAGE OWNERSHIP`
+The server owns the simulation. The dashboard, the 3D view and the phone monitor only **render** the state JSON they receive, so they can never disagree with each other.
 
-```mermaid
-stateDiagram-v2
-  [*] --> Waiting
-  Waiting --> Assigned: assign robot
-  Assigned --> PickedUp: pickup
-  PickedUp --> Delivered: drop
-  Assigned --> Waiting: robot fails before pickup
-  PickedUp --> Stranded: robot fails after pickup
-  Stranded --> Assigned: recovery robot (adjacent cell)
-  Stranded --> Blocked: all adjacent cells blocked
-  Blocked --> Assigned: unblock, retry
-  Delivered --> [*]
-```
+<img src="assets/divider.svg" alt="" width="100%">
 
-Invariants checked every tick: one owner per job, one job per robot, a Delivered job never changes, delivered count never decreases.
+## 🎬 Three demo scenarios
 
-## `06 // DEMO SCENARIOS`
+Each loads with one click from the scenario picker.
 
-| Button | What you see |
-|---|---|
-| `narrow_passage` | One-cell corridor, three robots. Waits, avoided swap, stall detected, one robot yields to the pull-out cell. |
-| `failed_robot` | Fail a robot before pickup (job reassigned) and after pickup (package Stranded, recovered, delivered once). |
-| `blocked_aisle` | Block a cell mid-aisle; affected robots reroute via the other aisle; unblock later. |
+<details open>
+<summary><b>1 · Narrow passage:</b> head-on traffic in a one-cell aisle</summary>
 
-> Seeds are fixed. The narrow-passage seed is verified to really deadlock, and detector output is never faked.
+<br>
 
-## `07 // QUICK START`
+Three robots, one corridor. One robot waits, nobody swaps cells, a wait cycle is detected, the lowest-priority robot yields, and everyone finishes.
 
-```powershell
-.\start_all.ps1
-```
-
-Open the printed dashboard URL. Use the printed phone-monitor URL or QR code to view the read-only monitor from a phone on the same network.
-
-> **Why plain http?** An HTTPS page cannot open a `ws://` connection to a local address (mixed content). Run the live demo fully local; use Netlify/Vercel only for the landing page and backup video.
-
-## `08 // API CHEAT SHEET`
+You should see these kinds of lines in the log:
+`WAIT` · `CONFLICT_AVOIDED` · `DEADLOCK_DETECTED` · `DEADLOCK_RESOLVED`
+</details>
 
 <details>
-<summary><b>Click to expand</b></summary>
+<summary><b>2 · Robot failure and recovery:</b> before and after pickup</summary>
+
+<br>
+
+Fail one robot before it picks up (its job returns to `Waiting` and is reassigned), then fail another while it carries a package (the job becomes `Stranded`, another robot recovers it). Every job ends with exactly one `DELIVERED` event.
+
+`ROBOT_FAILED` · `JOB_REASSIGNED` · `PACKAGE_STRANDED` · `PICKUP` · `DELIVERED`
+</details>
+
+<details>
+<summary><b>3 · Blocked aisle:</b> disruption without a reset</summary>
+
+<br>
+
+Two parallel aisles. Block a cell while robots are mid-aisle. Affected robots reroute through the other aisle, the tick counter keeps running, and all jobs still complete.
+
+`CELL_BLOCKED` · `REPLAN` · `CELL_UNBLOCKED`
+</details>
+
+<img src="assets/divider.svg" alt="" width="100%">
+
+## 📊 Metrics
+
+| Metric | Meaning |
+|---|---|
+| **Completed / total jobs** | Jobs in the `Delivered` state out of all jobs |
+| **Total wait ticks** | Ticks where a robot had a task and chose to wait (idle time is not counted) |
+| **Conflicts prevented** | Times a robot had to wait because another robot held its next cell |
+| **Planner rejections** | Candidate moves the planner discarded due to reservations (not a collision count) |
+| **Congestion** | Occupancy index and per-cell heatmap |
+| **Deadlocks resolved / reassignments** | Counters |
+| **Invariant violations** | Safety-check failures. Should always be `0` |
+
+All numbers come from the run itself. Nothing is a benchmark against other systems.
+
+<img src="assets/divider.svg" alt="" width="100%">
+
+## 🚀 Quick start
+
+**Requirements:** Python 3.11+, Node.js 18+. Windows PowerShell is the primary platform.
+
+### One command
+
+```powershell
+.\start_all.ps1            # backend + frontend + links + phone QR
+.\start_all.ps1 -Demo      # also plays all three scenarios hands-free
+.\scripts\verify_all.ps1   # runs every check and prints READY / NOT READY
+.\stop_all.ps1             # stop everything
+```
+
+Open the dashboard at `http://localhost:5173`.
+
+### Manual
+
+```powershell
+# backend
+python -m pip install -r requirements.txt
+python run_server.py --host 0.0.0.0 --port 8000
+
+# frontend (second terminal)
+cd frontend
+npm install
+npm run dev
+```
+
+### Terminal demo (no browser needed)
+
+```powershell
+python demo_cli.py                                          # interactive ASCII view
+python demo_cli.py --scenario narrow_passage --scripted     # hands-free
+python demo_cli.py --scenario narrow_passage --scripted --no-ui
+```
+
+Keys: `1` `2` `3` scenarios · `SPACE` pause · `+` `-` speed · `n` step · `a` add job · `f` fail robot · `b` `u` block / unblock · `r` restart · `e` export log · `q` quit.
+
+### Tests
+
+```powershell
+python -m pytest -q          # engine + server
+cd frontend; npm test        # frontend
+```
+
+<img src="assets/divider.svg" alt="" width="100%">
+
+## 📱 Monitor from your phone
+
+1. Open the dashboard using your **laptop's network IP** (for example `http://192.168.1.23:5173`), not `localhost`.
+2. Click **Monitor on phone** and scan the QR code.
+3. Keep the phone and laptop on the **same Wi-Fi or hotspot**, and allow ports `8000` and `5173` in Windows Firewall.
+
+The phone page is read-only: live 2D or 3D grid, alerts for deadlocks and failed robots, metrics, robot and job lists, and the event log. Tap a robot to follow it in 3D.
+
+Need access from outside your network? Run `.\start_all.ps1 -Tunnel` (requires `cloudflared`) and use the HTTPS link it prints.
+
+<img src="assets/divider.svg" alt="" width="100%">
+
+## 🔌 API
+
+Base URL `http://localhost:8000`. Full contract and JSON examples live in [`docs/CONTRACT.md`](docs/CONTRACT.md).
+
+<details>
+<summary><b>REST endpoints</b></summary>
+
+<br>
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/api/state` | Full state JSON |
+| GET | `/api/state` | Full state snapshot |
+| GET | `/api/scenarios` | List scenarios |
 | POST | `/api/scenarios/{id}/load` | Load a scenario |
-| POST | `/api/sim/start`, `/pause`, `/speed` | Control the sim |
+| POST | `/api/sim/start` · `/pause` · `/step` | Run, pause, single tick |
+| POST | `/api/sim/speed` | Set speed (0.5, 1, 2, 4) |
 | POST | `/api/jobs` | Add a job while running |
-| POST | `/api/jobs/validate` | Dry-run edit |
-| PATCH | `/api/jobs/{id}` | Edit a Waiting/Assigned job |
-| POST | `/api/cells/block`, `/unblock` | Block or unblock a cell |
+| POST | `/api/jobs/validate` | Dry run: `valid` or `conflict` with a suggestion |
+| PATCH | `/api/jobs/{id}` | Edit a job (goes through the same planner) |
+| POST | `/api/cells/block` · `/unblock` | Disrupt or restore a cell |
 | POST | `/api/robots/{id}/fail` | Fail a robot |
-| GET | `/api/events?since=N` | Event catch-up |
-| WS | `/ws` | `state`, `event`, `error` messages |
-
+| GET | `/api/events?since=N` | Event log catch-up |
+| GET | `/api/metrics` | Metrics only |
+| GET | `/api/ml/status` | Whether an ML predictor is loaded |
+| WS | `/ws` | Pushes `state` and `event` messages |
 </details>
-
-## `09 // METRICS`
 
 <details>
-<summary><b>Click to expand</b></summary>
+<summary><b>State snapshot (shortened)</b></summary>
 
-- **Completed jobs:** Delivered / total
-- **Waiting time:** ticks a robot with a task chooses to wait
-- **Conflicts prevented:** counted *per plan* (a plan had to wait or detour because of a reservation)
-- **Congestion index:** occupied or reserved walkable cells, averaged over the last 20 ticks
-- **Invariant violations:** target is 0
-- **Deadlocks resolved, reassignments:** counters
-
-- Ticks start at zero; events record the tick in which the operation occurs.
-- Scenario jobs become available at their declared `at_tick`.
-- Edit suggestions select a currently configured pickup/drop by Manhattan proximity when the requested route is unavailable.
-- A stranded package remains recoverable at its failure coordinate; a robot that fails before pickup leaves an obstacle at its cell.
-
-## Run everything
-
-From the repository root in PowerShell:
-
-```powershell
-.\start_all.ps1
-.\start_all.ps1 -Demo
-.\scripts\verify_all.ps1
-.\stop_all.ps1
+```json
+{
+  "tick": 42,
+  "status": "running",
+  "scenario_id": "narrow_passage",
+  "grid": { "width": 12, "height": 7, "obstacles": [[3,0]], "blocked": [[7,3]],
+            "pickups": [{"id":"P1","pos":[1,3]}], "drops": [{"id":"D1","pos":[10,1]}] },
+  "robots": [{ "id":"R1", "pos":[4,3], "status":"moving", "carrying":"J1",
+               "path":[[5,3,43],[6,3,44]], "wait_ticks":2 }],
+  "jobs":   [{ "id":"J1", "state":"PickedUp", "owner":"R1" }],
+  "metrics": { "completed_jobs":3, "invariant_violations":0 }
+}
 ```
-
-The launcher creates the root `.venv`, installs backend/frontend dependencies when needed, opens the dashboard, and prints a phone-monitor QR link. Add `-NoBrowser` to suppress opening the dashboard or `-Tunnel` to request a Cloudflare quick tunnel. Logs and managed process IDs are stored under `logs/`.
-
-All numbers come from the run itself. No benchmarks against other systems.
-
 </details>
 
-## `10 // LIMITATIONS AND FUTURE WORK`
+<img src="assets/divider.svg" alt="" width="100%">
 
-- Simulation only. No real robots. Battery and charging are out of scope.
-- Deadlocks can still occur on dense grids; RoboWay detects and recovers.
-- **Future:** camera-based obstacle injection (OpenCV) via the same block API, and a real-robot adapter (MQTT or ROS 2). Not built or tested here.
+## 🗂️ Repository layout
 
-## `11 // TEAM`
+```text
+roboway/            simulation engine (planner, reservations, conflicts, deadlock, failures, metrics, server)
+roboway/ml/         optional predictor adapter (disabled until a model is configured)
+frontend/           React + Vite + TypeScript dashboard, 3D view, /monitor phone page
+scenarios/          narrow_passage, failed_robot, blocked_aisle
+tests/              pytest suite
+scripts/            end-to-end checks and demo autoplay
+docs/CONTRACT.md    state and API contract shared by every module
+legacy/             early mock backend, kept for reference
+```
 
-| Member | Role |
+## 🧭 Honest limits and roadmap
+
+- **Simulation only.** No real robots, and no claims about physical deployment.
+- **No battery model.** The engine does not simulate battery, so the UI does not show one.
+- **ML is a plug-in point, not a feature yet.** `roboway/ml/` and `/api/ml/*` exist, but no model is loaded. Predictions would be advisory and never feed the planner automatically.
+- **Future work:** camera-based obstacle injection (OpenCV) through the same block/unblock API, and warehouse map upload.
+
+## 👥 Team
+
+Built in 15 hours at **NexHack 2.0, Geeta University** (Problem Statement 5: Warehouse Robot Coordination Arena).
+
+| Name | Role |
 |---|---|
-| _name_ | Backend and engine |
-| _name_ | Frontend and landing page |
-| _name_ | 3D viewer and polish |
-| _name_ | Integration and pitch |
+| _Your name_ | Simulation engine and integration |
+| _Teammate_ | Website and control panel |
+| _Teammate_ | Backend support, scenarios and tests |
+| _Teammate_ | 3D / 2D viewer |
 
 <div align="center">
 
-`NexHack 2.0 // Geeta University // Problem Statement 5`
+<img src="assets/divider.svg" alt="" width="100%">
+
+<sub>ROBOWAY · plan in space and time · explain every decision</sub>
 
 </div>

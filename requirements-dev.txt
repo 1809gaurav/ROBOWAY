@@ -1,3 +1,4 @@
 pytest
 requests
 websockets
+httpx2

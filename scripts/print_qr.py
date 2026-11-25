@@ -12,7 +12,8 @@ def main() -> int:
     code = qrcode.QRCode(border=1)
     code.add_data(sys.argv[1])
     code.make(fit=True)
-    code.print_ascii(invert=True)
+    for row in code.get_matrix():
+        print("".join("##" if dark else "  " for dark in row))
     return 0
 
 

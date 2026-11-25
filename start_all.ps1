@@ -30,6 +30,9 @@ function Stop-Tree([int]$ProcessId) {
     if ($process) { Stop-Process -Id $ProcessId -Force -ErrorAction SilentlyContinue }
 }
 function Stop-Started {
+    if ($Started.demo) {
+        try { Invoke-RestMethod -Method Post -Uri "http://localhost:8000/api/sim/pause" -TimeoutSec 2 | Out-Null } catch { }
+    }
     foreach ($key in @("demo", "tunnel", "frontend", "backend")) {
         if ($Started[$key]) { Stop-Tree ([int]$Started[$key]) }
     }
@@ -124,6 +127,22 @@ try {
         $LanIp = ($candidates | Sort-Object @{Expression = "Gateway"; Descending = $true} | Select-Object -First 1).IP
     }
     if (-not $LanIp) {
+        $interfaces = [System.Net.NetworkInformation.NetworkInterface]::GetAllNetworkInterfaces()
+        $networkCandidates = foreach ($adapter in $interfaces) {
+            if ($adapter.OperationalStatus.ToString() -ne "Up" -or $adapter.Name -match "(?i)virtual|wsl|vpn|tap|loopback|hyper-v|vmware|virtualbox|docker|tailscale|wireguard|vethernet") { continue }
+            $properties = $adapter.GetIPProperties()
+            $hasGateway = @($properties.GatewayAddresses | Where-Object { $_.Address.AddressFamily.ToString() -eq "InterNetwork" -and $_.Address.ToString() -ne "0.0.0.0" }).Count -gt 0
+            foreach ($unicast in $properties.UnicastAddresses) {
+                if ($unicast.Address.AddressFamily.ToString() -ne "InterNetwork") { continue }
+                $ip = $unicast.Address.ToString()
+                if ($ip -notmatch "^(169\.254\.|127\.)") {
+                    [pscustomobject]@{ IP = $ip; Gateway = $hasGateway }
+                }
+            }
+        }
+        $LanIp = ($networkCandidates | Sort-Object @{Expression = "Gateway"; Descending = $true} | Select-Object -First 1).IP
+    }
+    if (-not $LanIp) {
         Write-Warn "No eligible LAN IPv4 address found; using localhost URLs. Check the active network adapter and default gateway."
         $LanIp = "localhost"
     } else { Write-Ok "LAN IPv4: $LanIp" }
@@ -201,7 +220,7 @@ try {
         $cloudflared = Get-Command cloudflared -ErrorAction SilentlyContinue
         if ($cloudflared) {
             $tunnelLog = Join-Path $Logs "tunnel.log"
-            $tunnel = Start-Process -FilePath $cloudflared.Source -ArgumentList @("tunnel", "--url", "http://localhost:8000") -RedirectStandardOutput $tunnelLog -RedirectStandardError $tunnelLog -PassThru
+            $tunnel = Start-Process -FilePath $cloudflared.Source -ArgumentList @("tunnel", "--url", "http://localhost:8000") -RedirectStandardOutput $tunnelLog -RedirectStandardError (Join-Path $Logs "tunnel-error.log") -PassThru
             $Started.tunnel = $tunnel.Id
             Save-Pids
             $deadline = (Get-Date).AddSeconds(30)
@@ -242,7 +261,5 @@ try {
     exit 1
 }
 finally {
-    if ([Console]::IsInputRedirected -eq $false -and $Host.Name -eq "ConsoleHost") {
-        # Ctrl+C interrupts the waiting loop; finally performs the same cleanup.
-    }
+    Stop-Started
 }

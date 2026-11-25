@@ -19,6 +19,9 @@ if (-not (Test-Path $PidFile)) {
     exit 0
 }
 $pids = Get-Content $PidFile -Raw | ConvertFrom-Json
+if ($pids.demo) {
+    try { Invoke-RestMethod -Method Post -Uri "http://localhost:8000/api/sim/pause" -TimeoutSec 2 | Out-Null } catch { }
+}
 foreach ($key in @("demo", "tunnel", "frontend", "backend")) {
     $value = $pids.$key
     if ($value) { Stop-Tree ([int]$value) }

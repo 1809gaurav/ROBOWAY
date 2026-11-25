@@ -96,19 +96,11 @@ Invariants checked every tick: one owner per job, one job per robot, a Delivered
 
 ## `07 // QUICK START`
 
-```bash
-# backend
-cd backend
-pip install -r requirements.txt
-uvicorn main:app --host 0.0.0.0 --port 8000
-
-# frontend (second terminal)
-cd frontend
-npm install
-npm run dev -- --host
+```powershell
+.\start_all.ps1
 ```
 
-Open `http://<your-laptop-ip>:5173` (use the laptop's network address, not `localhost`, if you want to open it on a phone).
+Open the printed dashboard URL. Use the printed phone-monitor URL or QR code to view the read-only monitor from a phone on the same network.
 
 > **Why plain http?** An HTTPS page cannot open a `ws://` connection to a local address (mixed content). Run the live demo fully local; use Netlify/Vercel only for the landing page and backup video.
 
